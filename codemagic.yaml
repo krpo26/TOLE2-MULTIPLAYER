@@ -1,0 +1,53 @@
+# Sin probar: el primer build puede necesitar ajustes.
+# Requiere export_presets.cfg con un preset llamado "Android" en el repo.
+workflows:
+  android-apk:
+    name: Android APK (Godot)
+    instance_type: linux_x2
+    max_build_duration: 30
+    environment:
+      vars:
+        GODOT_VERSION: "4.3"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Instalar Godot y plantillas
+        script: |
+          cd /tmp
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          unzip -oq Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          mkdir -p ~/.local/share/godot/export_templates
+          unzip -oq Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          mv templates ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+      - name: Configurar Android para Godot
+        script: |
+          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android \
+            -keystore /tmp/debug.keystore -storepass android \
+            -dname "CN=Android Debug,O=Android,C=US" -validity 9999
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-${GODOT_VERSION}.tres <<EOT
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_SDK_ROOT}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          export/android/debug_keystore = "/tmp/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOT
+      - name: Importar proyecto y exportar APK
+        script: |
+          godot --headless --path . --import || true
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/juego.apk
+    artifacts:
+      - build/*.apk
+    publishing:
+      email:
+        recipients:
+          - TU_CORREO@ejemplo.com
