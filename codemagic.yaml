@@ -64,8 +64,21 @@ workflows:
       - name: Importar proyecto y exportar APK
         script: |
           GODOT=/tmp/Godot.app/Contents/MacOS/Godot
-          $GODOT --headless --path . --import || true
+          $GODOT --headless --path . --import > /dev/null 2>&1 || true
           mkdir -p build
-          $GODOT --headless --verbose --path . --export-debug "Android" build/juego.apk
+          $GODOT --headless --verbose --path . --export-debug "Android" build/juego.apk > /tmp/export.log 2>&1
+          cat -v /tmp/export.log | tail -25
+          if [ ! -f build/juego.apk ]; then
+            echo "=========== DIAGNOSTICO ==========="
+            TPL="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+            echo "-- plantillas android:"; ls "$TPL" | grep -i android
+            echo "-- JAVA_HOME=$JAVA_HOME"; ls "$JAVA_HOME/bin/java"
+            echo "-- keystore:"; ls -la /tmp/debug.keystore
+            echo "-- SDK:"; ls "$HOME/android-sdk/build-tools" "$HOME/android-sdk/platforms"
+            echo "-- preset:"; grep -E "unique_name|arm64|signed|use_gradle" export_presets.cfg
+            echo "-- editor settings:"; cat "$HOME/Library/Application Support/Godot/editor_settings-${GODOT_VERSION}.tres" | grep android
+            echo "=========== FIN DIAGNOSTICO ==========="
+            exit 1
+          fi
     artifacts:
       - build/*.apk
