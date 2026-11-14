@@ -1,10 +1,10 @@
 # Sin probar: el primer build puede necesitar ajustes.
-# Requiere export_presets.cfg con un preset llamado "Android" en el repo.
+# Usa mac_mini_m2, la máquina incluida en el plan gratuito de Codemagic.
 workflows:
   android-apk:
     name: Android APK (Godot)
-    instance_type: linux_x2
-    max_build_duration: 30
+    instance_type: mac_mini_m2
+    max_build_duration: 20
     environment:
       vars:
         GODOT_VERSION: "4.3"
@@ -14,24 +14,27 @@ workflows:
       branch_patterns:
         - pattern: main
           include: true
+      cancel_previous_builds: true
     scripts:
       - name: Instalar Godot y plantillas
         script: |
           cd /tmp
-          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
-          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
-          unzip -oq Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
-          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
-          mkdir -p ~/.local/share/godot/export_templates
-          unzip -oq Godot_v${GODOT_VERSION}-stable_export_templates.tpz
-          mv templates ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          curl -sL -o godot.zip https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip
+          curl -sL -o tpl.tpz https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          unzip -oq godot.zip
+          TPL="$HOME/Library/Application Support/Godot/export_templates"
+          mkdir -p "$TPL"
+          unzip -oq tpl.tpz
+          rm -rf "$TPL/${GODOT_VERSION}.stable"
+          mv templates "$TPL/${GODOT_VERSION}.stable"
       - name: Configurar Android para Godot
         script: |
           keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android \
             -keystore /tmp/debug.keystore -storepass android \
             -dname "CN=Android Debug,O=Android,C=US" -validity 9999
-          mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-${GODOT_VERSION}.tres <<EOT
+          CFG="$HOME/Library/Application Support/Godot"
+          mkdir -p "$CFG"
+          cat > "$CFG/editor_settings-${GODOT_VERSION}.tres" <<EOT
           [gd_resource type="EditorSettings" format=3]
           [resource]
           export/android/android_sdk_path = "${ANDROID_SDK_ROOT}"
@@ -42,12 +45,9 @@ workflows:
           EOT
       - name: Importar proyecto y exportar APK
         script: |
-          godot --headless --path . --import || true
+          GODOT=/tmp/Godot.app/Contents/MacOS/Godot
+          $GODOT --headless --path . --import || true
           mkdir -p build
-          godot --headless --path . --export-debug "Android" build/juego.apk
+          $GODOT --headless --path . --export-debug "Android" build/juego.apk
     artifacts:
       - build/*.apk
-    publishing:
-      email:
-        recipients:
-          - TU_CORREO@ejemplo.com
